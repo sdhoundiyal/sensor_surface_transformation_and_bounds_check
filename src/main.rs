@@ -84,8 +84,7 @@ fn accept_origin() -> Vec<f32> { //User enters origin for the local cordinate sy
     vec![x,y,z]
 }
 
-fn accept_x_basis_vector() -> Vec<f32> { //User specifies direction of local X-axis in terms of angles with the global axes
-	println!("Please Specify the angles the local X-axis makes with the global axes in radians:");
+fn accept_basis_vector() -> Vec<f32> { //User specifies direction of local axis in terms of angles with the global axes
 
 	println!("with the X-axis:");
 	let mut x: f32 = read!();
@@ -102,23 +101,7 @@ fn accept_x_basis_vector() -> Vec<f32> { //User specifies direction of local X-a
 	vec![x,y,z]
 }
 
-fn accept_y_basis_vector() -> Vec<f32> {  //User specifies direction of local Y-axis in terms of angles with the global axes
-	println!("Please Specify the angles the local Y-axis makes with the global axes in radians:");
 
-	println!("with the X-axis:");
-	let mut x: f32 = read!();
-	x=x.cos();
-
-	println!("with the Y-axis:");
-	let mut y: f32 = read!();
-	y=y.cos();
-
-	println!("with the Z-axis:");
-	let  mut z: f32 = read!();
-    z=z.cos();
-	
-	vec![x,y,z]
-}
 
 fn accept_local_bounds( sensor_type: u32) -> Vec<f32> { //User specifies bounds in local coordinate system 
     println!("Please specify the bounds for the sensor");
@@ -199,7 +182,7 @@ fn define_23_zcordinate(plane: &[f32]) -> [[f32; 4]; 4] { // determine z coordin
     det_z
 }
 
-fn define_23_tanslation_matrix(origin: &[f32]) -> [[f32; 4]; 4] { //define Local to Global translation matrix
+fn define_23_translation_matrix(origin: &[f32]) -> [[f32; 4]; 4] { //define Local to Global translation matrix
 	let mut translate = [[0f32; 4]; 4];
 	translate[0][0] = 1.0;
 	translate[1][1] = 1.0;
@@ -219,8 +202,10 @@ pub fn define_new_sensor_surface() -> SensorSurface{ //User defines a new sensor
 	let surface_id: u32 = read!();
 	
 	let l_origin = accept_origin(); // user enters origin of local cordinate system in global cordinate system
-	let x_basis = accept_x_basis_vector(); // user defines x-axis of local cordinate system in terms of angles with global axis
-	let y_basis = accept_y_basis_vector(); // user defines x-axis of global cordinate system in terms of angles with global axis
+	println!("Please Specify the angles the local X-axis makes with the global axes in radians:");
+	let x_basis = accept_basis_vector(); // user defines x-axis of local cordinate system in terms of angles with global axis
+	println!("Please Specify the angles the local Y-axis makes with the global axes in radians:");
+	let y_basis = accept_basis_vector(); // user defines x-axis of global cordinate system in terms of angles with global axis
 	
 	let l_plane = define_local_surface(&x_basis,&y_basis,&l_origin); // equation of plance containing sensor-surface is calculated
 	
@@ -239,9 +224,21 @@ pub fn define_new_sensor_surface() -> SensorSurface{ //User defines a new sensor
 
 	let rotate23 = define_23_rotation_matrix(&x_basis,&y_basis); // calculate local to global rotation matrix
 	let getz23 = define_23_zcordinate(&l_plane); // matrix which determines global z cordiante using equation of plane
-	let translate23 = define_23_tanslation_matrix(&l_origin); //calculate local to global translation matrix
+	let translate23 = define_23_translation_matrix(&l_origin); //calculate local to global translation matrix
 	let temp = multiply_matricies(&getz23,&rotate23); 
 	let l_affine23 = multiply_matricies(&translate23,&temp); // calculate local to global affine transform matrix as product of all three matricies
+	println!("3 to 2");
+	for i in 0..4 {
+		for j in 0..4 {
+			println!("{}", l_affine32[i][j]);
+		}
+	}
+	println!("2 to 3");
+	for i in 0..4 {
+		for j in 0..4 {
+			println!("{}", l_affine23[i][j]);
+		}
+	}
 	SensorSurface { id: surface_id, affine32: l_affine32, affine23: l_affine23, bounds: l_bounds, shape: l_shape} // return sensor-surface information as instance of structure
 }
 
@@ -329,24 +326,49 @@ fn convert_to_local(affine:  &[[f32; 4]; 4], point: &[f32]) -> Vec<f32> { //conv
 	vec![local[0], local[1]]
 }
 
-/*#[cfg(test)]
+#[cfg(test)]
 mod tests {
 	use super::*;
 
     #[test]
-    fn test_local_bounds() {
-    	println!("Enter bounds");
-    	println!("along x axis");
-    	let xb: f32 = read!();
-    	println!("along y axis");
-    	let yb: f32 = read!();
-    	println!("Enter coordinates");
-    	println!("x coordinate");
-    	let x: f32 = read!();
-    	println!("y coordinate");
-    	let y: f32 = read!();
-    	println!("Enter 1 if within bounds, 0 otherwise");
-    	let bound: u8 = read!();
-        assert_eq!(test_bounds(&vec![xb, yb], &vec![x, y, 1.0, 1.0], 0), bound == 1);
+    fn test_within_local_bounds() {	
+        assert_eq!(test_bounds(&vec![1.93,3.45], &vec![1.94, 3.45, 1.0, 1.0], 0), false);
     }
-}*/
+
+    #[test]
+    fn test_outside_local_bounds() {	
+        assert_eq!(test_bounds(&vec![1.93,3.45], &vec![1.84, 3.43, 1.0, 1.0], 0), true);
+    }
+
+    #[test]
+    fn test_global_to_local_transform() {
+    	let aff:[[f32; 4]; 4] =[[0.2481754,-0.99999875,-0.5389615,0.0],[-0.99999875,-0.93533456,0.12050225,0.0],[0.0,0.0,1.0,0.0],[-3.0,-3.0,-3.0,1.0]];
+        let out = convert_to_local(&aff,&vec![2.17,3.19,4.17,1.0]);
+        let tes = vec![-4.898925,-4.6512184];
+        let mut flag: bool = true;
+        for i in 0..2 {
+        	if &out[i]!=&tes[i] {
+        		flag = false;
+        	}
+        }
+        assert_eq!(flag,true);
+    }
+    #[test]
+    fn test_local_to_global_transform() {
+    	let aff:[[f32; 4]; 4] =[[0.2481754,-0.99999875,-0.5389615,3.4113173],[-0.99999875,-0.93533456,0.12050225,4.38865637],[0.0,0.0,1.0,-4.0],[0.0,0.0,0.0,1.0]];
+        let out = convert_to_global(&aff,&vec![2.17,3.19,4.17,1.0]);
+        let tes = vec![-1.48760759,-0.26256378];
+        let mut flag: bool = true;
+        for i in 0..2 {
+        	if &out[i]!=&tes[i] {
+        		flag = false;
+        	}
+        }
+        assert_eq!(flag,true);
+    }
+
+
+
+    
+
+}
